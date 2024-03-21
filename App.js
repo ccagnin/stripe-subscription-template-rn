@@ -1,10 +1,15 @@
+import { StripeProvider } from '@stripe/stripe-react-native'
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
+import Payment from './components/Payments';
+
+const stripe_key = process.env.STRIPE_KEY;
 
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
+      <StripeProvider publishableKey={stripe_key} />
+      <Payment />
       <StatusBar style="auto" />
     </View>
   );
