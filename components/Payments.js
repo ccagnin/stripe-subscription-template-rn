@@ -5,6 +5,7 @@ import { usePaymentSheet, StripeProvider } from "@stripe/stripe-react-native";
 const Payments = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [planId, setPlanId] = useState('');
   const [ready, setReady] = useState(false);
   const [loadingPayment, setLoadingPayment] = useState(false); // novo estado para indicar se o pagamento está sendo inicializado
   const {initPaymentSheet, presentPaymentSheet} = usePaymentSheet();
@@ -41,8 +42,9 @@ const Payments = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name,
-          email,
+          name: "teste",
+          email: "teste@teste.com",
+          price_id: "price_1Or2MeJb0HiN0pQ4TbG4eMiT",
         }),
       });
 
