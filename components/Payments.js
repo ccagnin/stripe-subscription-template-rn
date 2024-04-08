@@ -1,23 +1,32 @@
-import { View, TextInput, Alert, Button, ActivityIndicator } from 'react-native'
+import { View, Alert, Button, ActivityIndicator } from 'react-native'
 import React, { useEffect, useState } from 'react'
 import { usePaymentSheet, StripeProvider } from "@stripe/stripe-react-native";
+import { useRoute } from '@react-navigation/native';
+
+const api_key = process.env.STRIPE_KEY;
 
 const Payments = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [planId, setPlanId] = useState('');
+  // Definição dos estados locais
   const [ready, setReady] = useState(false);
-  const [loadingPayment, setLoadingPayment] = useState(false); // novo estado para indicar se o pagamento está sendo inicializado
+  const [loadingPayment, setLoadingPayment] = useState(false);
   const {initPaymentSheet, presentPaymentSheet} = usePaymentSheet();
+  const [subscriptionId, setSubscriptionId] = useState(null);
 
+  // Obtenção dos parâmetros da rota, esses parâmetros são passados pelas telas anteriores
+  const route = useRoute();
+  const { userId, name, email, price_id } = route.params;
+
+  // Efeito para inicializar o pagamento ao carregar a tela
   useEffect(() => {
     initPayment();
   }, []);
 
+  // Função para inicializar o pagamento
   const initPayment = async () => {
-    setLoadingPayment(true); // Indicar que o pagamento está sendo inicializado
-    const {setupIntent, ephemeralKey, customer} = await fetchPaymentSheetParams();
-
+    setLoadingPayment(true);
+    // Obtenção dos parâmetros do pagamento do servidor backend
+    const {setupIntent, ephemeralKey, customer } = await fetchPaymentSheetParams();
+    // Inicialização da sessão de pagamento com o Stripe
     const {error} = await initPaymentSheet({
       customerId: customer,
       customerEphemeralKeySecret: ephemeralKey,
@@ -27,13 +36,15 @@ const Payments = () => {
       returnURL: 'example://stripe-redirect',
     });
     if (error) {
+      // Exibição de alerta em caso de erro
       Alert.alert(`Error code: ${error.code}`, error.message);
     } else {
-      setReady(true); // Definir ready como verdadeiro após o pagamento ser inicializado com sucesso
+      setReady(true); // Marca o pagamento como pronto
     }
-    setLoadingPayment(false); // Indicar que o pagamento foi inicializado
+    setLoadingPayment(false); // Marca o pagamento como carregado
   };
 
+  // Função para obter os parâmetros do pagamento do servidor backend
   const fetchPaymentSheetParams = async () => {
     try {
       const response = await fetch('http://192.168.15.2:4000/pay', {
@@ -41,71 +52,87 @@ const Payments = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        // Corpo da requisição com os parâmetros do usuário
         body: JSON.stringify({
-          name: "teste",
-          email: "teste@teste.com",
-          price_id: "price_1Or2MeJb0HiN0pQ4TbG4eMiT",
+          name,
+          email,
+          price_id,
         }),
       });
 
       console.log('response', response);
 
       if (!response.ok) {
-        throw new Error('Failed to fetch payment sheet params');
+        throw new Error('Erro ao buscar parâmetros do pagamento');
       }
 
-      const { setupIntent, ephemeralKey, customer } = await response.json();
-      console.log('setupIntent', setupIntent);
+      // Extração dos parâmetros da resposta da requisição
+      const { setupIntent, ephemeralKey, customer, subscriptionId } = await response.json();
+      setSubscriptionId(subscriptionId);
 
       return {
         setupIntent,
         ephemeralKey,
         customer,
+        subscriptionId,
       };
     } catch (error) {
       console.error('Erro ao buscar parâmetros do pagamento:', error);
-      throw error; // Re-lança o erro para que possa ser tratado no componente que chamou a função
+      throw error;
     }
   }
 
+  // Função para criar a assinatura ao pressionar o botão "Subscribe"
   const createSubscription = async () => {
     const {error} = await presentPaymentSheet();
     if (error) {
       Alert.alert(`Error code: ${error.code}`, error.message);
     } else {
-      Alert.alert('Success', 'Payment successfully processed');
+      try {
+        await saveSubscription(subscriptionId);
+        Alert.alert('Success', 'Payment successfully processed');
+      } catch (error) {
+        console.error('Erro ao salvar a assinatura:', error);
+        Alert.alert('Error', 'Failed to save subscription');
+      }
     }
-  }
+  };
 
+  // Função para salvar a assinatura no servidor backend e associar o subscriptionId ao ID do usuário
+  const saveSubscription = async (subscriptionId) => {
+    try {
+      const response = await fetch('http://rota.com/save-subscription', { //Essa rota é a da API principal, não da API de pagamentos
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriptionId,
+          userId: userId,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Erro ao salvar a assinatura no banco de dados');
+      }
+    } catch (error) {
+      console.error('Erro ao salvar a assinatura no banco de dados:', error);
+      throw error;
+    }
+  };
+
+  // Renderização da tela de pagamento
   return (
     <View>
-      <StripeProvider publishableKey={process.env.STRIPE_KEY}>
-        <TextInput
-      value={name}
-      onChangeText={text => setName(text)}
-      placeholder='Name'
-      style={{
-        width: 300,
-        fontSize: 20,
-        padding: 10,
-        borderWidth: 1
-      }} />
-      <TextInput value={email}
-        onChangeText={text => setEmail(text)}
-        style={{
-          width: 300,
-          fontSize: 20,
-          padding: 10,
-          borderWidth: 1}} />
-      {loadingPayment ? ( // Exibir indicador de carregamento se o pagamento estiver sendo inicializado
-        <ActivityIndicator size="large" color="#0000ff" />
-      ) : (
-        <Button
-          title='Subscribe'
-          onPress={createSubscription}
-          disabled={!ready} // Desabilita o botão se o pagamento não estiver pronto
-        />
-      )}
+      <StripeProvider publishableKey="pk_test_51Or2CoJb0HiN0pQ4JmPUUk5Xa2MO4kCsMTT7UcodyNt8Nigd8SoB5IO1egCTWOrVUDk0VbygKybfbCtm38RUid4y00dPJP7Iio">
+        {loadingPayment ? ( // Indicador de carregamento enquanto o pagamento está sendo inicializado
+          <ActivityIndicator size="large" color="#0000ff" />
+        ) : (
+          <Button
+            title='Subscribe'
+            onPress={createSubscription}
+            disabled={!ready} // Desabilita o botão se o pagamento não estiver pronto
+          />
+        )}
       </StripeProvider>
     </View>
   )
@@ -117,4 +144,4 @@ CardFormStyle = {
   marginBottom: 30,
 }
 
-export default Payments
+export default Payments;
